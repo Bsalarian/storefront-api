@@ -16,7 +16,9 @@ COPY --from=builder /opt/venv /opt/venv
 COPY main.py .
 
 ENV PATH="/opt/venv/bin:$PATH"
+ENV PYTHONPATH="/opt/venv/lib/python3.11/site-packages"
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # non-root user, a hardening meassure 
 USER 65532:65532

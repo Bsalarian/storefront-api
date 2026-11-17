@@ -2,7 +2,7 @@ import os
 import socket
 import logging
 from datetime import datetime, timezone
-from fastapi import FastAPI, response
+from fastapi import FastAPI, Response
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 logging.basicConfig(
@@ -28,6 +28,7 @@ def root():
     REQUEST_COUNT.labels(endpoint="/").inc()
     api_key_loaded = bool(os.getenv("API_KEY"))
     logger.info(f"Storefront status checked. Secret injected: {api_key_loaded}")
+
     return {
         "service": "storefront-api",
         "status": "operational",
