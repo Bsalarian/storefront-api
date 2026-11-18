@@ -1,8 +1,10 @@
 # ---- Build Stage ----
-FROM python:3.11-slim-bookworm AS builder
+FROM python:3.12-alpine AS builder
 
 WORKDIR /build
-RUN python -m venv /opt/venv
+
+RUN apk upgrade --no-cache && \
+    python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
@@ -14,13 +16,17 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 FROM gcr.io/distroless/python3-debian12:nonroot
 
 WORKDIR /app
+
+# Apply security patches and create non-root user matching K8s UID 65532
+RUN apk upgrade --no-cache && \
+    adduser -D -u 65532 appuser
+
 COPY --from=builder /opt/venv /opt/venv
 COPY main.py .
 
-ENV PATH="/opt/venv/bin:$PATH"
-ENV PYTHONPATH="/opt/venv/lib/python3.11/site-packages"
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # non-root user, a hardening meassure 
 USER 65532:65532
