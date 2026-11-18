@@ -11,10 +11,12 @@ env:
   ECR_REPOSITORY: storefront-api
 
 jobs:
-  ci-pipeline:
-    permissions: { contents: read, security-events: write }
+  build-test-scan-push:
     name: 1. Build, Smoke Test, Scan & Push
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout application code
@@ -72,6 +74,7 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
           severity: "CRITICAL,HIGH"
+
       - name: Push verified image to ECR
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -79,27 +82,29 @@ jobs:
         run: |
           docker push $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $REGISTRY/$ECR_REPOSITORY:latest
-  update-gitops:
-      name: 2. Bump Image Tag in GitOps Repo
-      needs: build-test-scan-push
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout GitOps config repository
-          uses: actions/checkout@v4
-          with:
-            repository: Bsalarian/storefront-gitops
-            token: ${{ secrets.GITOPS_TOKEN }}
-            path: gitops
 
-        - name: Update test overlay image tag
-          env:
-            REGISTRY: 155312145338.dkr.ecr.eu-north-1.amazonaws.com
-            IMAGE_TAG: ${{ github.sha }}
-          run: |
-            cd gitops/deploy/overlays/test
-            kustomize edit set image $REGISTRY/storefront-api=$REGISTRY/storefront-api:$IMAGE_TAG
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add kustomization.yaml
-            git diff --staged --quiet || git commit -m "chore(test): bump storefront-api to ${IMAGE_TAG::7}"
-            git push
+  update-gitops:
+    name: 2. Bump Image Tag in GitOps Repo
+    needs: build-test-scan-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GitOps config repository
+        uses: actions/checkout@v4
+        with:
+          repository: Bsalarian/storefront-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
+
+      - name: Update test overlay image tag
+        env:
+          REGISTRY: 155312145338.dkr.ecr.eu-north-1.amazonaws.com
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd gitops/deploy/overlays/test
+          kustomize edit set image $REGISTRY/storefront-api=$REGISTRY/storefront-api:$IMAGE_TAG
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add kustomization.yaml
+          git diff --staged --quiet || git commit -m "chore(test): bump storefront-api to ${IMAGE_TAG::7}"
+          git push
