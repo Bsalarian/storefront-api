@@ -14,10 +14,10 @@ jobs:
   build-test-scan-push:
     name: 1. Build, Smoke Test, Scan & Push
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-
+  permissions:
+        contents: read
+        actions: read
+        security-events: write
     steps:
       - name: Checkout application code
         uses: actions/checkout@v4
