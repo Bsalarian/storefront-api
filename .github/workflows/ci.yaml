@@ -1,0 +1,73 @@
+name: Build, Scan, Push & Update GitOps
+
+on:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "**.md"
+
+env:
+  AWS_REGION: eu-north-1
+  ECR_REPOSITORY: storefront-api
+
+jobs:
+  build-scan-push:
+    name: Build, Trivy Scan & Push to ECR
+    runs-on: ubuntu-latest
+    steps:
+          - name: Checkout application code
+            uses: actions/checkout@v4
+
+          - name: Configure AWS credentials
+            uses: aws-actions/configure-aws-credentials@v4
+            with:
+              aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+              aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+              aws-region: ${{ env.AWS_REGION }}
+
+          - name: Login to Amazon ECR
+            id: login-ecr
+            uses: aws-actions/amazon-ecr-login@v2
+
+          - name: Build container image locally
+            env:
+              REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+              IMAGE_TAG: ${{ github.sha }}
+            run: |
+              docker build -t $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $REGISTRY/$ECR_REPOSITORY:latest .
+
+          - name: Run Trivy vulnerability scanner (Gate before ECR push)
+            uses: aquasecurity/trivy-action@0.28.0
+            with:
+              image-ref: "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+              format: "table"
+              exit-code: "1"
+              ignore-unfixed: true
+              severity: "CRITICAL,HIGH"
+          - name: Push hardened image to ECR
+            env:
+              REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+              IMAGE_TAG: ${{ github.sha }}
+            run: |
+              docker push $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+              docker push $REGISTRY/$ECR_REPOSITORY:latest
+
+          - name: Checkout GitOps config repo
+            uses: actions/checkout@v4
+            with:
+              repository: bsalarian/storefront-gitops
+              token: ${{ secrets.GITOPS_TOKEN }}
+              path: gitops
+
+          - name: Update test overlay image tag in GitOps repo
+            env:
+              REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+              IMAGE_TAG: ${{ github.sha }}
+            run: |
+              cd gitops/deploy/overlays/test
+              kustomize edit set image $REGISTRY/$ECR_REPOSITORY=$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git add kustomization.yaml
+              git diff --staged --quiet || git commit -m "chore(test): bump storefront-api to ${IMAGE_TAG::7}"
+              git push
