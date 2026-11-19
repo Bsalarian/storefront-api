@@ -38,7 +38,7 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $REGISTRY/$ECR_REPOSITORY:latest .
+          docker build -t $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
 
       - name: Smoke test hardened read-only container
         env:
@@ -75,13 +75,12 @@ jobs:
           ignore-unfixed: true
           severity: "CRITICAL,HIGH"
 
-      - name: Push verified image to ECR
+      - name: Push verified immutable image to ECR
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker push $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $REGISTRY/$ECR_REPOSITORY:latest
 
   update-gitops:
     name: 2. Bump Image Tag in GitOps Repo
